@@ -244,6 +244,159 @@ def decide(ds, request, ledger, forecast):
     }
 
 
+VALID_AFFORDABILITY_STATUSES = {
+    "affordable_now",
+    "affordable_with_plan",
+    "affordable_later",
+    "not_affordable",
+}
+VALID_PAYMENT_METHODS = {
+    "full_payment",
+    "partial_payment",
+    "installments",
+    "wait",
+    "not_recommended",
+}
+
+
+def validate_row(row: dict, request: ING.PurchaseRequest) -> tuple[bool, str | None]:
+    """Hard-gate row validation per problem_statement.md & design.md §3.8."""
+    # 1. Check amount_safe_to_pay bounds
+    try:
+        safe = Decimal(str(row.get("amount_safe_to_pay", "")))
+    except Exception:
+        return False, f"Invalid amount_safe_to_pay: {row.get('amount_safe_to_pay')}"
+    if safe < ZERO or safe > request.requested_amount:
+        return False, f"amount_safe_to_pay {safe} out of bounds [0, {request.requested_amount}]"
+
+    # 2. Check enum fields
+    aff = row.get("affordability_status")
+    if aff not in VALID_AFFORDABILITY_STATUSES:
+        return False, f"Invalid affordability_status: {aff}"
+
+    method = row.get("recommended_payment_method")
+    if method not in VALID_PAYMENT_METHODS:
+        return False, f"Invalid recommended_payment_method: {method}"
+
+    # 3. Status/method consistency
+    if aff == "affordable_now":
+        if method != "full_payment":
+            return False, f"affordable_now requires full_payment, got {method}"
+        if row.get("earliest_date_for_full_payment") != request.request_date.isoformat():
+            return (
+                False,
+                f"affordable_now requires earliest_date_for_full_payment == request_date, got {row.get('earliest_date_for_full_payment')}",
+            )
+        if row.get("spending_changes_needed") != "none":
+            return False, "affordable_now cannot have spending changes"
+
+    if aff == "not_affordable":
+        if method != "not_recommended":
+            return False, f"not_affordable requires not_recommended, got {method}"
+        if row.get("payment_plan") != "none":
+            return False, "not_affordable requires payment_plan='none'"
+        if row.get("earliest_date_for_full_payment") != "":
+            return False, "not_affordable requires empty earliest_date_for_full_payment"
+        if row.get("spending_changes_needed") != "none":
+            return False, "not_affordable requires spending_changes_needed='none'"
+
+    if method == "not_recommended":
+        if row.get("payment_plan") != "none":
+            return False, "not_recommended requires payment_plan='none'"
+
+    # 4. payment_plan format and chronological check
+    plan_str = row.get("payment_plan", "")
+    if plan_str != "none":
+        legs = []
+        for part in plan_str.split("|"):
+            if ":" not in part:
+                return False, f"Malformed payment_plan leg: {part}"
+            d_str, a_str = part.split(":", 1)
+            try:
+                d = dt.date.fromisoformat(d_str)
+                a = Decimal(a_str)
+            except Exception:
+                return False, f"Malformed payment_plan entry: {part}"
+            if a <= ZERO:
+                return False, f"Non-positive payment leg amount: {a}"
+            legs.append((d, a))
+
+        if not legs:
+            return False, "Empty payment plan legs"
+
+        # Chronological check
+        for i in range(1, len(legs)):
+            if legs[i][0] < legs[i - 1][0]:
+                return False, f"Payment plan legs not chronological: {legs}"
+
+        if method == "partial_payment":
+            if len(legs) != 2:
+                return False, f"partial_payment requires exactly 2 legs, got {len(legs)}"
+            if legs[0][0] != request.request_date:
+                return False, f"partial_payment leg 1 must be on request_date {request.request_date}"
+            if legs[0][1] != safe:
+                return False, f"partial_payment leg 1 amount {legs[0][1]} != amount_safe_to_pay {safe}"
+            total_legs = legs[0][1] + legs[1][1]
+            if abs(total_legs - request.requested_amount) > Decimal("0.01"):
+                return False, f"partial_payment legs sum {total_legs} != requested_amount {request.requested_amount}"
+
+        if method == "full_payment":
+            if len(legs) != 1:
+                return False, f"full_payment requires exactly 1 leg, got {len(legs)}"
+            if abs(legs[0][1] - request.requested_amount) > Decimal("0.01"):
+                return False, f"full_payment leg amount {legs[0][1]} != requested_amount {request.requested_amount}"
+
+        if method == "wait":
+            if len(legs) != 1:
+                return False, f"wait requires exactly 1 leg, got {len(legs)}"
+            if row.get("earliest_date_for_full_payment") and legs[0][0].isoformat() != row.get("earliest_date_for_full_payment"):
+                return False, f"wait leg date {legs[0][0]} != earliest_date_for_full_payment"
+
+    # 5. spending_changes_needed check
+    sc_str = row.get("spending_changes_needed", "")
+    if sc_str != "none":
+        changes = sc_str.split("|")
+        if len(changes) > config.MAX_SPENDING_CHANGES:
+            return False, f"Too many spending changes: {len(changes)} > 3"
+        seen_events = set()
+        for ch in changes:
+            parts = ch.split(":")
+            if parts[0] == "stop" and len(parts) == 2:
+                ev_id = parts[1]
+            elif parts[0] == "reduce_to" and len(parts) == 3:
+                ev_id = parts[1]
+                try:
+                    new_amt = Decimal(parts[2])
+                    if new_amt < ZERO:
+                        return False, f"Negative reduce_to amount in {ch}"
+                except Exception:
+                    return False, f"Malformed reduce_to amount in {ch}"
+            else:
+                return False, f"Malformed spending change: {ch}"
+            if ev_id in seen_events:
+                return False, f"Duplicate event_id {ev_id} in spending changes"
+            seen_events.add(ev_id)
+
+    return True, None
+
+
+def make_fallback_row(request: ING.PurchaseRequest, reason_msg: str) -> dict:
+    """Safe fallback row produced when validator trips (DEC-038)."""
+    return {
+        "request_id": request.request_id,
+        "amount_safe_to_pay": "0",
+        "affordability_status": "not_affordable",
+        "recommended_payment_method": "not_recommended",
+        "payment_plan": "none",
+        "earliest_date_for_full_payment": "",
+        "spending_changes_needed": "none",
+        "decision_explanation": (
+            f"Do not make this payment by {human_date(request.desired_completion_date)}. "
+            f"Fallback applied: {reason_msg}."
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -259,6 +412,7 @@ def run(dataset_dir: Path, out_path: Path) -> None:
         )
 
     rows = []
+    validator_trips = 0
     for request in ds.requests:
         # Balance safety and earliest_full_payment are evaluated over a longer,
         # fixed forecast window (gold measures safe over ~90 days); PLANS only
@@ -278,13 +432,25 @@ def run(dataset_dir: Path, out_path: Path) -> None:
         )
         forecast = FC.simulate_balance(ledger)
         row = decide(ds, request, ledger, forecast)
-        rows.append({"request_id": request.request_id, **row})
+        full_row = {"request_id": request.request_id, **row}
+
+        # Hard-gate validator (DEC-038)
+        valid, err = validate_row(full_row, request)
+        if not valid:
+            validator_trips += 1
+            print(f"  warn: validator tripped for {request.request_id} ({err}); applying fallback")
+            full_row = make_fallback_row(request, err or "Validation failed")
+
+        rows.append(full_row)
 
     if engine is not None:
         st = engine.stats
         print(
             f"extraction usage: image_calls={st.image_misses} image_cache_hits={st.image_hits}"
         )
+
+    if validator_trips > 0:
+        print(f"validator summary: {validator_trips} row(s) tripped and were replaced with fallbacks")
 
     cols = [
         "request_id",
