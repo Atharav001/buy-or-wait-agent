@@ -1,0 +1,7 @@
+log.txt
+.DS_Store
+*.pyc
+__pycache__/
+.env
+code.zip
+.pytest_cache/

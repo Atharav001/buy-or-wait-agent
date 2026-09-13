@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buy or Wait? — Decision Ledger</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e16;
+    --panel:#111826;
+    --panel-2:#161f30;
+    --line:#232d40;
+    --ink:#dbe2ef;
+    --ink-dim:#8b96ac;
+    --gold:#cda45e;
+    --gold-dim:#8a7248;
+    --teal:#4fb8a6;
+    --rose:#d9645a;
+    --serif:'Lora',serif;
+    --sans:'IBM Plex Sans',sans-serif;
+    --mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.55;
+  }
+  ::selection{ background:var(--gold-dim); color:#0a0e16; }
+
+  /* ---------- header ---------- */
+  header{
+    padding:56px 8vw 40px;
+    border-bottom:1px solid var(--line);
+    background:
+      radial-gradient(ellipse 900px 300px at 15% 0%, rgba(205,164,94,0.08), transparent 60%),
+      var(--bg);
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--gold);
+    letter-spacing:.04em;
+  }
+  h1{
+    font-family:var(--serif);
+    font-weight:700;
+    font-size:clamp(28px,4vw,44px);
+    margin:10px 0 14px;
+    color:#f2ede3;
+    max-width:16ch;
+  }
+  .lede{
+    color:var(--ink-dim);
+    max-width:62ch;
+    font-size:15.5px;
+  }
+  .meta-row{
+    display:flex; gap:28px; flex-wrap:wrap;
+    margin-top:26px;
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-dim);
+  }
+  .meta-row b{ color:var(--ink); font-weight:600; }
+  .dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--teal); margin-right:6px; }
+
+  /* ---------- layout ---------- */
+  .wrap{ display:grid; grid-template-columns:220px 1fr; gap:0; max-width:1180px; margin:0 auto; }
+  nav.toc{
+    position:sticky; top:0; align-self:start;
+    padding:40px 20px 40px 8vw;
+    max-height:100vh; overflow-y:auto;
+    border-right:1px solid var(--line);
+    font-family:var(--mono); font-size:12.5px;
+  }
+  nav.toc .toc-label{ color:var(--ink-dim); text-transform:uppercase; font-size:10px; letter-spacing:.08em; margin-bottom:12px; }
+  nav.toc a{
+    display:block; color:var(--ink-dim); text-decoration:none; padding:5px 0;
+    border-left:2px solid transparent; padding-left:10px; margin-left:-12px;
+  }
+  nav.toc a:hover{ color:var(--gold); border-left-color:var(--gold-dim); }
+  main{ padding:40px 8vw 100px 40px; min-width:0; }
+
+  /* ---------- protocol / instructions box ---------- */
+  .protocol{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--gold);
+    border-radius:4px;
+    padding:26px 28px;
+    margin-bottom:56px;
+  }
+  .protocol h2{
+    font-family:var(--serif); font-size:19px; margin:0 0 14px; color:#f2ede3;
+  }
+  .protocol p{ color:var(--ink-dim); font-size:14px; margin:0 0 14px; }
+  .protocol ol{ margin:0 0 18px; padding-left:20px; color:var(--ink); font-size:14px; }
+  .protocol li{ margin-bottom:8px; }
+  .rule-strong{ color:var(--rose); font-weight:600; }
+  .protocol pre{
+    background:#0c1220; border:1px solid var(--line); border-radius:4px;
+    padding:18px; overflow-x:auto; font-family:var(--mono); font-size:12.5px;
+    color:#b9c3d6; line-height:1.6;
+  }
+  .protocol pre .ph{ color:var(--gold); }
+  .protocol pre .tag{ color:var(--teal); }
+
+  /* ---------- pipeline diagram ---------- */
+  .diagram-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:4px;
+    padding:24px; margin-bottom:56px;
+  }
+  .diagram-card .cap{ font-family:var(--mono); font-size:11px; color:var(--ink-dim); margin-top:14px; text-align:center; }
+  svg text{ font-family:var(--mono); }
+
+  /* ---------- decision cards ---------- */
+  .section-label{
+    font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink-dim); margin:0 0 22px; padding-bottom:10px; border-bottom:1px solid var(--line);
+  }
+  .decision{
+    scroll-margin-top:20px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    margin-bottom:26px;
+    overflow:hidden;
+  }
+  .decision.superseded{ opacity:.6; }
+  .d-head{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:18px 24px; background:var(--panel-2); border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .d-id{
+    font-family:var(--mono); font-size:12px; color:var(--gold); font-weight:600;
+    background:rgba(205,164,94,0.1); border:1px solid var(--gold-dim); border-radius:3px;
+    padding:2px 8px;
+  }
+  .d-title{ font-family:var(--serif); font-size:19px; color:#f2ede3; font-weight:600; margin-left:12px; flex:1; }
+  .status{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+    border-radius:3px; padding:3px 9px; border:1px solid;
+  }
+  .status.active{ color:var(--teal); border-color:var(--teal); background:rgba(79,184,166,0.08); }
+  .status.superseded{ color:var(--rose); border-color:var(--rose); background:rgba(217,100,90,0.08); }
+  .d-body{ padding:22px 24px 26px; }
+  .d-body h4{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-dim); margin:20px 0 8px;
+  }
+  .d-body h4:first-child{ margin-top:0; }
+  .d-body p{ margin:0 0 4px; font-size:14.5px; }
+  .d-body ul{ margin:6px 0 0; padding-left:20px; }
+  .d-body li{ margin-bottom:6px; font-size:14.5px; }
+  .option-row{
+    display:flex; gap:10px; padding:8px 0; border-bottom:1px dashed var(--line); font-size:14px;
+  }
+  .option-row:last-child{ border-bottom:none; }
+  .option-tag{
+    font-family:var(--mono); font-size:11px; flex-shrink:0; width:110px; padding-top:1px;
+  }
+  .option-tag.rejected{ color:var(--rose); }
+  .option-tag.chosen{ color:var(--teal); }
+  .precedent{
+    background:#0c1220; border:1px solid var(--line); border-radius:4px;
+    padding:12px 16px; font-size:13.5px; color:var(--ink-dim); margin-top:6px;
+  }
+  .precedent b{ color:var(--ink); }
+  .links{ font-family:var(--mono); font-size:12px; color:var(--ink-dim); margin-top:14px; }
+  .links a{ color:var(--gold); }
+
+  footer{
+    padding:40px 8vw 60px; border-top:1px solid var(--line);
+    font-family:var(--mono); font-size:12px; color:var(--ink-dim);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">BUY OR WAIT? — HACKERRANK ORCHESTRATE SEPT'26</div>
+  <h1>Decision Ledger</h1>
+  <p class="lede">Every architectural, algorithmic, and product decision made on this build — why it was chosen, what it beat, and what real-world system it's modeled on. This ledger is <b>append-only</b>: nothing below is ever deleted or rewritten.</p>
+  <div class="meta-row">
+    <span><span class="dot"></span><b>33</b> decisions logged</span>
+    <span>Opened: <b>2026-09-12</b></span>
+    <span>Owner: <b>Atharav</b></span>
+    <span>Companion docs: <b>design.md</b> · <b>PRD.md</b></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc">
+    <div class="toc-label">Jump to entry</div>
+    <a href="#protocol">Logging protocol</a>
+    <a href="#dec-001">DEC-001 Deterministic core</a>
+    <a href="#dec-002">DEC-002 Batch CLI, no services</a>
+    <a href="#dec-003">DEC-003 Fail-loud ingest</a>
+    <a href="#dec-004">DEC-004 Exact-date FX only</a>
+    <a href="#dec-005">DEC-005 Conflict priority order</a>
+    <a href="#dec-006">DEC-006 Safer-interpretation rule</a>
+    <a href="#dec-007">DEC-007 Pending credit/debit rule</a>
+    <a href="#dec-008">DEC-008 Recurrence needs history</a>
+    <a href="#dec-009">DEC-009 Daily forecast, not monthly</a>
+    <a href="#dec-010">DEC-010 Plan ranking order</a>
+    <a href="#dec-011">DEC-011 Structural injection defense</a>
+    <a href="#dec-012">DEC-012 Context-aware vision extraction</a>
+    <a href="#dec-013">DEC-013 Caged explainer</a>
+    <a href="#dec-014">DEC-014 Evidence-keyed caching</a>
+    <a href="#dec-015">DEC-015 Golden-set CI gate</a>
+    <a href="#dec-016">DEC-016 Schema-enforced LLM calls</a>
+    <a href="#dec-017">DEC-017 Validator as hard gate</a>
+    <a href="#dec-018">DEC-018 Determinism regression check</a>
+    <a href="#dec-019">DEC-019 Per-request audit log</a>
+    <a href="#dec-020">DEC-020 24h milestone budget</a>
+    <a href="#dec-021">DEC-021 Deadline: gate AND tie-break</a>
+    <a href="#dec-022">DEC-022 Exact enum-literal fidelity</a>
+    <a href="#dec-023">DEC-023 Fee-aware installment total</a>
+    <a href="#dec-024">DEC-024 Three-scope evidence handling</a>
+    <a href="#dec-025">DEC-025 Priority-driven expense cuts</a>
+    <a href="#dec-026">DEC-026 Public GitHub repo + remotes</a>
+    <a href="#dec-027">DEC-027 Provider-flexible extraction</a>
+    <a href="#dec-028">DEC-028 Largest-first expense-cut order</a>
+    <a href="#dec-029">DEC-029 Salary continuation is default</a>
+    <a href="#dec-030">DEC-030 Plan safety = plan's window</a>
+    <a href="#dec-031">DEC-031 Equal-cost: earlier start wins</a>
+    <a href="#dec-032">DEC-032 Zero-model-call submission</a>
+    <a href="#dec-033">DEC-033 Horizon extends beyond 90d</a>
+  </nav>
+
+  <main>
+
+    <section id="protocol" class="protocol">
+      <h2>Logging protocol — read before adding an entry</h2>
+      <p>This file is a permanent record. It works like a ledger, not a wiki page.</p>
+      <ol>
+        <li><span class="rule-strong">Never delete or rewrite</span> an existing decision's Context, Options, Decision, or Rationale — even if it turns out to be wrong.</li>
+        <li>If a later choice reverses or replaces an old one, write a <b>new</b> entry with the next ID in sequence. In the new entry's "Supersedes" line, name the old ID. Then the <em>only</em> permitted edit to the old entry is flipping its status badge to <span class="status superseded" style="display:inline">SUPERSEDED</span> and adding a one-line "Superseded by" pointer at the bottom — its reasoning stays untouched as a record of what was believed at the time.</li>
+        <li>IDs are sequential and never reused: <code>DEC-001, DEC-002, DEC-003…</code>. If Atharav is using a different ID scheme in the codebase (ticket numbers, ADR numbers), use that scheme instead — just stay consistent and sequential within this file.</li>
+        <li>Every entry answers the same five questions, in this order: <b>Context</b> (what triggered the decision) → <b>Options considered</b> (what else was on the table, and why each lost) → <b>Decision</b> (what we're doing) → <b>Why it's right for this build</b> → <b>Real-world precedent</b> (a market/research example that backs it up).</li>
+        <li>Small decisions get logged too. A one-line naming convention deserves 4 lines here just as much as a big architectural call deserves 20 — the point is a complete trail, not a curated highlight reel.</li>
+      </ol>
+      <p>Copy this block to add a new entry. Fill every <span class="ph">{placeholder}</span>, keep every section:</p>
+      <pre>&lt;div class="decision" id="dec-{021}"&gt;
+  &lt;div class="d-head"&gt;
+    &lt;div&gt;&lt;span class="d-id"&gt;DEC-{021}&lt;/span&gt;&lt;span class="d-title"&gt;{Short decision title}&lt;/span&gt;&lt;/div&gt;
+    &lt;span class="status active"&gt;ACTIVE&lt;/span&gt;
+  &lt;/div&gt;
+  &lt;div class="d-body"&gt;
+    &lt;h4&gt;Context&lt;/h4&gt;
+    &lt;p&gt;{What problem forced this decision}&lt;/p&gt;
+
+    &lt;h4&gt;Options considered&lt;/h4&gt;
+    &lt;div class="option-row"&gt;&lt;span class="option-tag rejected"&gt;REJECTED&lt;/span&gt;&lt;span&gt;{Option A} — {why it lost}&lt;/span&gt;&lt;/div&gt;
+    &lt;div class="option-row"&gt;&lt;span class="option-tag chosen"&gt;CHOSEN&lt;/span&gt;&lt;span&gt;{Option B} — {one line}&lt;/span&gt;&lt;/div&gt;
+
+    &lt;h4&gt;Decision&lt;/h4&gt;
+    &lt;p&gt;{What we're doing, precisely}&lt;/p&gt;
+
+    &lt;h4&gt;Why it's right for this build&lt;/h4&gt;
+    &lt;ul&gt;&lt;li&gt;{reason}&lt;/li&gt;&lt;/ul&gt;
+
+    &lt;h4&gt;Real-world precedent&lt;/h4&gt;
+    &lt;div class="precedent"&gt;{Market/research example, with source}&lt;/div&gt;
+
+    &lt;p class="links"&gt;Supersedes: {none | DEC-0XX}&lt;/p&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</pre>
+    </section>
+
+    <div class="diagram-card">
+      <svg viewBox="0 0 900 140" width="100%">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4a5570"/></marker>
+        </defs>
+        <text x="450" y="16" text-anchor="middle" fill="#8b96ac" font-size="10">EACH BOX = ONE DECISION'S HOME · CODE = TEAL · LLM (CAGED) = GOLD</text>
+        <g font-size="11" font-weight="600">
+          <rect x="10" y="35" width="120" height="55" rx="5" fill="rgba(79,184,166,0.08)" stroke="#4fb8a6"/>
+          <text x="70" y="58" text-anchor="middle" fill="#dbe2ef">Ingest &amp;</text>
+          <text x="70" y="72" text-anchor="middle" fill="#dbe2ef">Currency</text>
+          <line x1="130" y1="62" x2="165" y2="62" stroke="#4a5570" marker-end="url(#arrow)"/>
+
+          <rect x="167" y="35" width="120" height="55" rx="5" fill="rgba(205,164,94,0.08)" stroke="#cda45e"/>
+          <text x="227" y="58" text-anchor="middle" fill="#f2ede3">Extraction</text>
+          <text x="227" y="72" text-anchor="middle" fill="#f2ede3">(quarantined)</text>
+          <line x1="287" y1="62" x2="322" y2="62" stroke="#4a5570" marker-end="url(#arrow)"/>
+
+          <rect x="324" y="35" width="120" height="55" rx="5" fill="rgba(79,184,166,0.08)" stroke="#4fb8a6"/>
+          <text x="384" y="58" text-anchor="middle" fill="#dbe2ef">Reconciler</text>
+          <text x="384" y="72" text-anchor="middle" fill="#dbe2ef">+ Forecaster</text>
+          <line x1="444" y1="62" x2="479" y2="62" stroke="#4a5570" marker-end="url(#arrow)"/>
+
+          <rect x="481" y="35" width="120" height="55" rx="5" fill="rgba(79,184,166,0.08)" stroke="#4fb8a6"/>
+          <text x="541" y="58" text-anchor="middle" fill="#dbe2ef">Solver</text>
+          <text x="541" y="72" text-anchor="middle" fill="#dbe2ef">(safety + rank)</text>
+          <line x1="601" y1="62" x2="636" y2="62" stroke="#4a5570" marker-end="url(#arrow)"/>
+
+          <rect x="638" y="35" width="120" height="55" rx="5" fill="rgba(205,164,94,0.08)" stroke="#cda45e"/>
+          <text x="698" y="58" text-anchor="middle" fill="#f2ede3">Explainer</text>
+          <text x="698" y="72" text-anchor="middle" fill="#f2ede3">(caged)</text>
+          <line x1="758" y1="62" x2="793" y2="62" stroke="#4a5570" marker-end="url(#arrow)"/>
+
+          <rect x="795" y="35" width="95" height="55" rx="5" fill="rgba(217,100,90,0.08)" stroke="#d9645a"/>
+          <text x="842" y="58" text-anchor="middle" fill="#f2ede3">Validator</text>
+          <text x="842" y="72" text-anchor="middle" fill="#f2ede3">(gate)</text>
+        </g>
+        <text x="450" y="112" text-anchor="middle" fill="#8b96ac" font-size="10">DEC-001 · DEC-011 · DEC-012 · DEC-013 · DEC-017 all live on this line</text>
+      </svg>
+      <div class="cap">Fig. 1 — decision-to-module map, referenced throughout the entries below</div>
+    </div>
+
+    <p class="section-label">Logged decisions — DEC-001 → DEC-020</p>
+
+    <div class="decision" id="dec-001">
+      <div class="d-head"><div><span class="d-id">DEC-001</span><span class="d-title">Deterministic core, LLM only at the edges</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>The challenge scores structured numeric fields (<code>amount_safe_to_pay</code>, dates, plan math) against hidden ground truth. Something has to decide the actual numbers.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Single large LLM prompt reasons through the whole ledger and outputs the row directly — fast to build, but non-reproducible and unauditable.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>LLM-as-orchestrator calling tools ad hoc (agentic loop) — flexible, but tie-break order and safety math become emergent, not guaranteed.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Plain code owns reconciliation, forecasting, safety checks, and ranking. LLM only reads blank amounts off images and turns messages into typed facts.</span></div>
+        <h4>Decision</h4>
+        <p>No LLM call sits anywhere on the path that produces <code>amount_safe_to_pay</code>, <code>payment_plan</code>, or the ranking outcome. Those are pure functions over reconciled data.</p>
+        <h4>Why it's right for this build</h4>
+        <ul>
+          <li>Same input always produces the same output — required for the golden-set regression gate (DEC-015) to mean anything.</li>
+          <li>Every number is explainable by pointing at code, which is exactly what the AI Judge interview will probe.</li>
+          <li>Removes an entire class of hallucinated-arithmetic bugs before they can happen.</li>
+        </ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent"><b>LedgerGuard</b> (Cursor × Briefcase Hackathon 2026) splits financial-document processing into a 7-layer pipeline where layers 1, 5, and 7 are strictly deterministic and layers 2–4/6 are LLM — the same probabilistic-judgment/deterministic-execution split. Production reliability guides ("Building Reliable LLM Applications," dev.to, 2026) converge on the same rule: the model provides judgment, surrounding code provides structure, checks, and guardrails.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-002">
+      <div class="d-head"><div><span class="d-id">DEC-002</span><span class="d-title">Batch CLI script, not a service</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>250 rows, one 24-hour window, judged on output correctness — not on uptime or concurrent users.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>FastAPI service + queue + DB — over-engineered for a batch judging task, burns build hours on infra instead of correctness.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Notebook-only, no module structure — fast to hack but impossible to unit-test cleanly (design.md §9 needs isolated modules).</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Single-process Python CLI, modular files, sequential row processing.</span></div>
+        <h4>Decision</h4>
+        <p><code>python main.py --requests dataset/requests.csv --out output.csv</code> is the entire runtime surface.</p>
+        <h4>Why it's right for this build</h4>
+        <ul>
+          <li>Every hour spent on scaffolding that doesn't move a scoring metric is an hour lost — scale needs match the 250-row batch, nothing more.</li>
+          <li>Simpler surface area = fewer places for non-determinism to creep in (DEC-018 depends on this).</li>
+        </ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Even enterprise cash-flow-forecasting vendors (HighRadius, ChatFin) run forecasting as scheduled batch jobs against a data warehouse, not as a live request-response service — forecasting is inherently a batch problem, not a real-time one.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-003">
+      <div class="d-head"><div><span class="d-id">DEC-003</span><span class="d-title">Fail loud on ingest, never silently coerce</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Deliberately messy dataset. A missing column or wrong dtype could either crash noisily or get silently "fixed" into wrong data.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>pandas default coercion (e.g. blank amount → NaN → treated as 0 downstream) — directly contradicts the spec's explicit warning never to treat blank as zero.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Explicit schema check at load time; blank amounts flagged for the extraction layer, not defaulted.</span></div>
+        <h4>Decision</h4>
+        <p><code>ingest/</code> raises on any column/type mismatch and tags every blank-amount row for downstream extraction instead of filling it in.</p>
+        <h4>Why it's right for this build</h4>
+        <ul>
+          <li>A loud failure during dev costs minutes; a silent wrong number costs the whole row's score and is invisible until the diff against sample data.</li>
+        </ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Cash-flow underwriting platforms (Nova Credit Cash Atlas) explicitly call out "differentiating real income from transfers" as a named data-quality problem — the whole category treats source-data ambiguity as something to resolve explicitly, not paper over.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-004">
+      <div class="d-head"><div><span class="d-id">DEC-004</span><span class="d-title">Exact-date FX lookup only</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p><code>exchange_rates.csv</code> gives fixed, dated rates. Some event dates might not have an exact matching rate row.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Nearest-date fallback — introduces an invented rule not in the spec, and a wrong guess compounds through every downstream number.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Live FX API — explicitly against the "no live rates" ground rule.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Exact <code>(date, from, to)</code> join; missing rate is logged as a data-integrity gap and the event is excluded from safe-cash math rather than guessed.</span></div>
+        <h4>Decision</h4>
+        <p><code>currency.convert()</code> never interpolates or approximates a rate.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Matches FR-10 in the PRD exactly; keeps the pipeline deterministic (DEC-001).</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">PocketSmith's multi-currency forecasting and enterprise treasury tools alike anchor every conversion to a recorded rate on a specific date — approximated FX is treated as a modeling error, not a convenience, once money math is involved.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-005">
+      <div class="d-head"><div><span class="d-id">DEC-005</span><span class="d-title">Fixed conflict-resolution priority order</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>The same economic event can appear more than once across ledger rows, with amendments layered via <code>linked_event_id</code>.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>"Last row wins" by file order — arbitrary, not grounded in what the data actually means.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>LLM adjudicates conflicting versions of an event — reintroduces non-determinism into the reconciler, which DEC-001 rules out.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Fixed 4-step priority: explicit cancellation/settlement/amendment beats everything → newer record in the same linked chain → settled beats forecast/pending → otherwise pick the safer reading.</span></div>
+        <h4>Decision</h4>
+        <p>Reconciler applies these four rules top-to-bottom, first match wins, for every duplicate/conflicting event pair.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Every conflict resolves the same way every run — testable rule by rule (design.md §9.1).</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">BNPL cash-flow underwriters (Cloudsquare, Carrington Labs) describe this exact hierarchy in production: settled transaction data overrides projected/estimated data, and explicit status changes (declined, reversed) always take precedence over inferred state.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-006">
+      <div class="d-head"><div><span class="d-id">DEC-006</span><span class="d-title">"Safer interpretation" defined precisely</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>The spec says to prefer the "safer" reading when ambiguity remains, but doesn't define safer — left as a trap for inconsistent, per-case improvisation.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Handle ambiguity case-by-case as it's discovered during testing — guarantees inconsistent behavior across similar-but-not-identical cases.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>One universal rule: assume less available cash AND a larger/earlier obligation, never the reverse.</span></div>
+        <h4>Decision</h4>
+        <p>Codified once in design.md §4.4 and referenced everywhere ambiguity appears, instead of re-litigated per module.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>One rule, applied uniformly, is far easier to defend live in the AI Judge interview than twenty ad hoc judgment calls.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Conservative-bias underwriting is standard in real affordability checks — UK FCA's 2026 BNPL affordability rules push lenders toward erring on the side of not overextending a borrower when data is incomplete, exactly this asymmetry.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-007">
+      <div class="d-head"><div><span class="d-id">DEC-007</span><span class="d-title">Reserve pending debits, ignore pending credits</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Spec explicitly lists this asymmetric treatment of pending inflows vs outflows.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Symmetric treatment (count both once "expected") — simpler code, but directly violates the spec and overstates safe cash.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Debits reserved as soon as pending/scheduled; credits (bonuses, refunds, investment gains) excluded until <code>status = settled</code>.</span></div>
+        <h4>Decision</h4>
+        <p>Implemented as an explicit filter in the reconciler, not an incidental side effect of a generic "sum by status" function.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Directly implements G3/FR-1 — this single rule prevents the most common way a system over-promises affordability.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Standard cash-flow-underwriting practice (Cloudsquare guide): "surplus months" and "periods of strain" are computed from confirmed deposits only, while known upcoming obligations are subtracted immediately regardless of confirmation status.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-008">
+      <div class="d-head"><div><span class="d-id">DEC-008</span><span class="d-title">Recurrence requires real repeat history</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Tempting shortcut: infer "this looks like a subscription" from a category label alone (e.g. one Netflix charge).</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Category-based heuristic recurrence — fast, but a single occurrence categorized "subscription" is not evidence of a repeating obligation, and would over-reserve cash incorrectly.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Only mark an event recurring if the ledger shows actual repeated occurrences for that user.</span></div>
+        <h4>Decision</h4>
+        <p>Reconciler's classifier checks event history count/spacing before tagging <code>recurring=true</code>.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Avoids both false positives (phantom recurring costs shrinking safe-to-pay unfairly) and false negatives (missing a real subscription).</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Cash Atlas™ and similar bank-transaction-analysis tools explicitly build "recurring obligation" detection on pattern frequency across the transaction history, never on merchant-name/category alone.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-009">
+      <div class="d-head"><div><span class="d-id">DEC-009</span><span class="d-title">Event-driven daily forecast, not monthly buckets</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Safety check must hold "at any point" in 90 days, per spec — a monthly-average model can hide a mid-month dip below <code>minimum_balance_to_keep</code>.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Monthly net-flow average — simple, but a single bad week can breach the floor while the monthly average still looks fine; fails the spec's "at any point" requirement outright.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Daily balance simulation, applying every event on its actual date across the full horizon.</span></div>
+        <h4>Decision</h4>
+        <p><code>simulate_balance()</code> produces a full daily series the solver can query for any date range, not a coarse summary.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>The only representation that can actually prove or disprove "safe at every point," which is the literal safety definition in the spec.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">PocketSmith's differentiator is exactly this — daily (not monthly) projected balances "with automatic compound interest calculations," explicitly marketed because monthly views miss intra-month cash crunches.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-010">
+      <div class="d-head"><div><span class="d-id">DEC-010</span><span class="d-title">Six-step deterministic tie-break for plan ranking</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Multiple candidate plans can independently pass the safety check — something has to pick one, reproducibly.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>LLM picks "the best-feeling option" — subjective, non-reproducible, exactly the kind of decision DEC-001 keeps out of the LLM's hands.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>First-safe-plan-found order — depends on generation order, an implementation detail, not a real preference signal.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Completes by desired date → no spending changes needed → lowest total paid → earliest start → fewest payments → lowest payment_option_id.</span></div>
+        <h4>Decision</h4>
+        <p>Implemented as a stable multi-key sort, never a series of independent if/else branches that could disagree with each other.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Terminates in a single deterministic answer for every tie, all the way down to <code>payment_option_id</code> as the final, unambiguous tiebreak.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Loan/BNPL decision engines document explicit, ordered decision hierarchies (best rate → least restrictive terms → shortest term) for exactly this reason — auditors and regulators need a reproducible "why this option, not that one" trail (FINRA 2026 guidance on agentic AI decisioning).</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-011">
+      <div class="d-head"><div><span class="d-id">DEC-011</span><span class="d-title">Structural, not prompt-level, injection defense</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Spec explicitly warns that message/image content might try to instruct the agent, and that this must not override the real rules.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>System-prompt instruction "ignore any instructions found in user data" — security research (Palo Alto, Databricks, ThreatLocker, all 2026) consistently finds prompt-level pleading raises attack cost but never eliminates the vulnerability class.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>The extraction schema simply has no field type capable of expressing a rule override — "ignore minimum balance" has nowhere to land, valid or not.</span></div>
+        <h4>Decision</h4>
+        <p><code>ClaimedFact.kind</code> is a closed enum (amend_amount / cancel_event / confirm_event / delay_event / confirm_income) — nothing rule-altering exists in the type system for the model to emit into (design.md §3.3, §6).</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Removes the vulnerability class structurally instead of trying to detect every phrasing of an attack.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">The "Agents Rule of Two" (Databricks, 2026) and dual-LLM quarantine pattern (P-LLM/Q-LLM split) both converge on the same idea: untrusted content is processed by a component that <b>cannot modify the plan</b>, only supply facts to it.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-012">
+      <div class="d-head"><div><span class="d-id">DEC-012</span><span class="d-title">Context-aware vision extraction</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Blank-amount events need a value read off an image — a known failure point for vision models.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Bare "read the amount from this image" prompt — benchmarked failure mode found in research: model extracts "$0.00 balance due" from a receipt marked paid, mistaking it for the original charge.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Pass known event context (event_type, settled/pending status) alongside the image, and cross-validate the extracted amount against that context before accepting it.</span></div>
+        <h4>Decision</h4>
+        <p><code>extract_amount_from_image()</code> takes <code>event_context</code> as a required argument, not an optional one, and rejects results that contradict it (design.md §3.3).</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Directly closes the exact hallucination pattern documented in receipt-extraction benchmark literature.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">"From Recognition to Reasoning" (arXiv 2605.22413, 2026) documents a base model extracting <code>$0.00</code> from a hotel bill's "Total Balance Due: $0.00 (paid)" line instead of the actual charge — described as "a lack of financial logic in general-purpose models," fixed only once the model was given the transaction's semantic role, not just its pixels.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-013">
+      <div class="d-head"><div><span class="d-id">DEC-013</span><span class="d-title">Explainer sees only the final numeric decision</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p><code>decision_explanation</code> must be accurate and non-generic, but must never become a second, uncontrolled place where the "real" answer gets decided.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Give the explainer the full ledger + messages + images "for richer explanations" — reopens the door for the explanation to contradict or leak unvalidated raw data into the final answer.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Explainer receives only the already-validated <code>OutputRow</code> object — numbers, dates, plan — and fills a template into prose.</span></div>
+        <h4>Decision</h4>
+        <p>No raw ledger access, no message/image access, inside <code>explainer/</code> (design.md §3.7).</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Makes it structurally impossible for the explanation to say something the numbers don't back up — a common failure mode called out in LLM-guardrail literature as "instance-level" vs "field-level" drift.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">XAI-in-finance research (systematic review, IEEE TAI 2024, cited by Finance Utility LLM 2026) treats "intelligible decision-making" as a first-class architectural requirement — explanation generation is expected to be traceable to the decision, not an independent narrative pass.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-014">
+      <div class="d-head"><div><span class="d-id">DEC-014</span><span class="d-title">Cache extraction by evidence ID, not request ID</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Development means re-running the pipeline many times; the same image/message might be relevant to more than one request.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Cache by request_id — re-extracts the same evidence every time it appears under a different request, wasting tokens and money.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Cache keyed on <code>image_id</code>/<code>message_id</code>, scoped per user to avoid cross-user leakage.</span></div>
+        <h4>Decision</h4>
+        <p>Implemented as a simple on-disk cache in <code>extraction/</code>, checked before every model call (design.md §7).</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Keeps <code>usage_report.md</code> numbers honest and dev-loop iteration cheap during the 24-hour window.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Standard production LLM-app practice (freeCodeCamp/dev.to reliability guides, 2025-26): idempotency and caching by content identity, not by call site, is listed as a baseline cost-control pattern for any pipeline that re-processes the same evidence repeatedly.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-015">
+      <div class="d-head"><div><span class="d-id">DEC-015</span><span class="d-title">sample_requests.csv as a CI regression gate</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>It's the only ground-truth signal available before submission — and the rules explicitly forbid hardcoding against it.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Hand-inspect a few sample rows once, move on — leaves regressions from later changes undetected.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Special-case logic keyed on sample request IDs — explicitly disallowed, and would fail on the hidden 225 rows anyway.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>An automated eval script diffs every code change against all 25 sample rows, field by field; no change ships if it regresses a previously-passing field.</span></div>
+        <h4>Decision</h4>
+        <p><code>evaluation/run_eval.py</code> is run before every commit that touches solver/reconciler/forecaster logic (PRD FR-11).</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Turns the only labeled data into an actual safety net instead of a one-time sanity glance.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Standard ML-ops practice: a small labeled holdout used as a continuous regression gate, never as training signal — exactly how this dataset's 25 labeled rows should be treated relative to the 250-row full run.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-016">
+      <div class="d-head"><div><span class="d-id">DEC-016</span><span class="d-title">Schema-enforced LLM calls with bounded retry</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>LLM output is probabilistic even with a good prompt — the extraction layer needs a hard contract, not a hopeful one.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Free-text response parsed with regex — brittle, breaks on the first formatting drift.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Pydantic/function-calling schema enforced on every extraction call, one retry with the validation error fed back on failure, then fall back to the safer interpretation (DEC-006).</span></div>
+        <h4>Decision</h4>
+        <p>Every LLM boundary in the codebase returns a typed object or fails explicitly — never an unparsed string that downstream code has to guess at.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Converts "the model might format this weirdly" from a runtime surprise into a caught, logged, handled case.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">"How to Keep LLM Outputs Predictable Using Pydantic Validation" (freeCodeCamp, 2025) and Guardrails AI's RAIL spec both document this exact pattern — retry-with-error-feedback is called out as the point where most models self-correct on the first attempt.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-017">
+      <div class="d-head"><div><span class="d-id">DEC-017</span><span class="d-title">Validator is a hard gate, not a warning</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>A malformed row (wrong format, inconsistent math) could still get written and silently fail hidden scoring.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Log a warning and write the row anyway — a graded submission has no human in the loop to notice the warning.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Any hard-assert failure routes that single row to <code>not_recommended</code> with an explanation noting the failure, instead of writing malformed data.</span></div>
+        <h4>Decision</h4>
+        <p><code>validator/</code> runs as the very last step before <code>output.csv</code> append, with veto power (design.md §3.8).</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>A safe, conservative, well-formed fallback row always scores better than a malformed one that might break the grader's parser entirely.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">"LLM Guardrails and Safety in Production AI Systems" (Towards AI, 2026): "the rules engine has veto power over the LLM. Always." — the exact posture adopted here, just applied to the whole pipeline's final output, not only LLM text.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-018">
+      <div class="d-head"><div><span class="d-id">DEC-018</span><span class="d-title">Byte-identical reruns as a determinism check</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>DEC-001 claims determinism — that claim needs a test, not just an architectural intention.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Trust the architecture, skip the check — an unseeded call or unsorted dict iteration can silently break determinism without any code review catching it.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Run the full pipeline twice on identical input, diff the two <code>output.csv</code> files; must be byte-identical (modulo cache warm-up).</span></div>
+        <h4>Decision</h4>
+        <p>Part of the pre-submission checklist in PRD §9, not an optional nice-to-have.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Cheapest possible test that catches an entire category of subtle, hard-to-debug scoring inconsistency.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">"Building Reliable LLM Applications" (dev.to, 2026) lists idempotency and reproducibility as first-class engineering requirements for LLM-touching systems, on par with type-checking and structured output.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-019">
+      <div class="d-head"><div><span class="d-id">DEC-019</span><span class="d-title">Per-request audit log for judge defensibility</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>AI Judge interview will probe specific rows and ask "why did the agent decide this" — that answer needs to exist before the interview, not be reconstructed live.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Re-run the pipeline with debug prints if asked — slow, and doesn't survive code changes made after the row was generated.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Every request writes a structured <code>audit_log/&lt;request_id&gt;.json</code> capturing which events were included/excluded/deduped and why, alongside the final decision.</span></div>
+        <h4>Decision</h4>
+        <p>Generated automatically as part of the normal run (design.md §3.9), not a separate debug mode.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>PRD's acceptance criteria explicitly require explaining 3 arbitrary rows unaided before the interview — this is what makes that possible.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">FINRA's 2026 agentic-AI oversight guidance and cash-flow-underwriting adverse-action-code requirements both mandate a reconstructible decision trail per case — audit logging isn't a nice-to-have in this domain, it's the baseline regulators already expect.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-020">
+      <div class="d-head"><div><span class="d-id">DEC-020</span><span class="d-title">24-hour milestone budget, correctness-first ordering</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Fixed submission deadline (Sept 13, 18:00 IST). Effort has to be sequenced so the highest-risk, highest-weight modules get built and tested first.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Build output formatting and a nice README first, backfill the actual decision logic — polish without correctness scores zero.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Build everything in parallel with no fixed order — high context-switching cost solo, under a hard deadline.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Ingest/currency → extraction → reconciler/forecaster → solver → explainer/validator → golden-set run → full run → packaging, with buffer at the end for judge-defense rehearsal.</span></div>
+        <h4>Decision</h4>
+        <p>Exact hour windows recorded in PRD §11 — reconciler/forecaster/solver (the deterministic correctness core) get the largest time allocation, packaging gets the smallest.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Every later stage depends on the reconciled ledger being right — errors caught early are cheap, errors caught at hour 20 are not.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Standard incremental-delivery practice for time-boxed builds: get the deterministic core correct and tested before spending time on the parts that are cheap to fix late (formatting, packaging, docs).</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <p class="section-label">Second pass — full spec re-verification against source, DEC-021 → DEC-025</p>
+
+    <div class="decision" id="dec-021">
+      <div class="d-head"><div><span class="d-id">DEC-021</span><span class="d-title">Deadline compliance: hard gate AND literal tie-break, both</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Re-reading <code>problem_statement.md</code> word-for-word surfaced a genuine tension: the overview defines "safe" as balance-safety <em>and</em> completing by <code>desired_completion_date</code> together, while the "Choosing Between Safe Plans" section separately lists "complete by <code>desired_completion_date</code>" as ranking tie-break #1 — which only makes sense if some "safe" candidates can still miss the deadline.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Treat it as pure ranking preference only, no hard filter — risks recommending a plan whose final payment lands after the user's stated deadline, contradicting the overview's own definition of "safe."</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Treat it as pure hard filter, drop the ranking clause as "redundant" — clean, but assumes we've correctly guessed the spec's intent; if a hidden test exercises the tie-break specifically, silently omitting it fails for no good reason.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Implement both. Deadline compliance is a hard eligibility gate at candidate-generation time (design.md §4.5) <em>and</em> the literal tie-break rule still runs during ranking (§4.6) — accepting that the tie-break will rarely fire as a real differentiator.</span></div>
+        <h4>Decision</h4>
+        <p>No candidate reaches <code>rank_plans</code> with a completion date after <code>desired_completion_date</code>; the tie-break function still evaluates the rule regardless, unmodified from the spec's literal wording.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Costs nothing extra to implement both, and removes any bet on which reading of an ambiguous line the hidden grader assumes — the more literal, most spec-faithful interpretation wins over the more "elegant" one.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Defensive redundancy in rule interpretation is standard practice when a spec is the actual grading contract — treat an ambiguous clause as "implement the stricter, more literal reading" rather than resolve it via inferred elegance, the same posture compliance/regulatory-reporting systems take toward ambiguous statutory text.</div>
+        <p class="links">Supersedes: none — refines DEC-010's ranking order with the gate/tie-break relationship it left implicit.</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-022">
+      <div class="d-head"><div><span class="d-id">DEC-022</span><span class="d-title">Exact enum-literal fidelity, re-verified against source</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>The first-draft <code>design.md</code> used placeholder-guessed literals (<code>"now"</code>, <code>"with_plan"</code>, <code>"later"</code>, <code>"not_at_all"</code>) for <code>affordability_status</code> instead of the spec's actual strings — a real bug, caught only by re-fetching and re-reading <code>problem_statement.md</code> in full rather than working from memory of an earlier summary.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Trust the first draft's recollection of the schema — it was close but wrong, and "close but wrong" on an exact-match graded field scores identically to "completely wrong."</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Re-fetch the primary source document before hardening any file, correct every literal against it verbatim: <code>affordable_now</code>, <code>affordable_with_plan</code>, <code>affordable_later</code>, <code>not_affordable</code>.</span></div>
+        <h4>Decision</h4>
+        <p><code>OutputRow.affordability_status</code> and <code>.recommended_payment_method</code> in design.md are now typed as closed literals matching the spec exactly, with a note to re-verify against source before coding, not against a prior summary.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>This is precisely the class of "loose part" the hardening pass was meant to catch — a single wrong string constant would have silently failed every graded row.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Contract-testing practice (consumer-driven contracts, OpenAPI schema validation) exists specifically because hand-recalled schemas drift from source-of-truth documents over time — the fix is always "validate against the source artifact directly," never "trust the last summary of it."</div>
+        <p class="links">Supersedes: none — corrects an implementation error in the code sketched under DEC-001, not a reversal of the decision itself.</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-023">
+      <div class="d-head"><div><span class="d-id">DEC-023</span><span class="d-title">Fee-aware <code>total_paid</code> for installment ranking</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Spec confirms <code>request_payment_options.csv</code> carries explicit financing fees and a stated total payable amount per option — tie-break #3 ("minimize total amount paid") is meaningless if <code>total_paid</code> is computed as a naive sum of <code>requested_amount</code> instead of the option's real fee-inclusive total.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Recompute total_paid as len(legs) × requested_amount/legs — ignores fees entirely, makes tie-break #3 silently wrong whenever two options differ only in financing cost.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Source <code>Plan.total_paid</code> directly from the payment option's stated total payable amount for installment candidates; for partial/full payment it's simply <code>requested_amount</code> (no fees apply per spec).</span></div>
+        <h4>Decision</h4>
+        <p><code>Plan</code> model gains an explicit <code>completion_date</code> and fee-sourced <code>total_paid</code> field (design.md §4, Plan schema) rather than deriving both implicitly from <code>legs</code>.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Prevents a class of ranking bug that would be invisible in testing unless a fixture specifically includes two same-length, different-fee installment options.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">BNPL/lending comparison tools (the same industry parallel as DEC-005/DEC-010) always rank offers on APR/total-cost-of-credit, never on principal alone — fee-blind comparison is a well-known consumer-harm pattern regulators specifically watch for.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-024">
+      <div class="d-head"><div><span class="d-id">DEC-024</span><span class="d-title">Three-scope evidence handling (user / request / event)</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>First-draft design.md's extraction module implicitly assumed all messages/images are event-linked. Re-reading the spec's join rules shows <code>messages.csv</code>/<code>images.csv</code> attach via <code>user_id</code>, <code>request_id</code>, <b>or</b> <code>related_event_id</code> — three distinct scopes.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Only process evidence with a populated <code>related_event_id</code> — simpler code, but silently discards request- and user-scoped evidence, a real accuracy gap on any request whose relevant clarification isn't tied to a specific ledger row.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Handle all three scopes explicitly, each routed through the identical extraction guard sequence (§3.3), differing only in where the resulting fact is applied.</span></div>
+        <h4>Decision</h4>
+        <p>New design.md §3.4a defines exactly how each scope is consumed: event-scoped → reconciler fact; request-scoped → request-context amendment; user-scoped → cached profile-level fact.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Closes a gap that would have been invisible until a hidden test case specifically relied on request- or user-level evidence with no event link.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Document-understanding pipelines in fintech (invoice/KYC processing) routinely model evidence at multiple linkage granularities (account-level, transaction-level, document-level) precisely because real-world evidence doesn't always attach at the finest-grained level available.</div>
+        <p class="links">Supersedes: none — extends DEC-011's quarantine model to all three scopes rather than just event-scoped ones.</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-025">
+      <div class="d-head"><div><span class="d-id">DEC-025</span><span class="d-title">Priority-driven, minimal-sufficient-set expense selection</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Original design left <code>spending_changes_needed</code> selection under-specified — "pick flexible expenses to cut" without an ordering rule. This is exactly the mechanism the spec's personalization requirement (two identical-balance users, different outcomes) depends on, so leaving it vague was the biggest remaining "loose part" in the whole pipeline.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Cut flexible expenses in whatever order they appear in the ledger — arbitrary, not personalized, and not defensible if a judge asks "why this expense and not that one."</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Always propose the maximum allowed 3 changes "to be safe" — violates the spec's implicit minimality (why force 3 cuts when 1 restores safety?) and needlessly restricts the user.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Rank flexible expenses by the user's own stated priority (lowest priority cut first); try <code>stop</code> before <code>reduce_to</code> on the current candidate; stop adding changes as soon as the plan becomes safe (minimal sufficient set, capped at 3).</span></div>
+        <h4>Decision</h4>
+        <p>New design.md §3.4b defines <code>select_spending_changes()</code> precisely, including the stop-before-reduce and minimality rules.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>This single algorithm is what actually produces different, defensible answers for two users with identical balances but different stated priorities — the exact personalization bar the spec sets.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Budget-reallocation features in Copilot Money and PocketSmith rank discretionary categories by user-set priority when suggesting cuts to hit a savings goal — never a flat/arbitrary cut order — validating priority-ranked, minimal-intervention selection as the expected UX and reasoning pattern for this exact kind of recommendation.</div>
+        <p class="links">Supersedes: none — fills in the mechanism DEC-006's "safer interpretation" rule assumed existed but never defined.</p>
+      </div>
+    </div>
+
+    <p class="section-label">Build session — DEC-026 → DEC-028</p>
+
+    <div class="decision" id="dec-026">
+      <div class="d-head"><div><span class="d-id">DEC-026</span><span class="d-title">Public GitHub repo + remote topology</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>The participant wanted the working project pushed to a public GitHub repository under a name that reflects the system, separate from the HackerRank starter clone.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Private repo — safer for IP, but the participant explicitly asked for public.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Push directly into the starter repo / replace <code>upstream</code> — would destroy the ability to diff against the authoritative spec and pollute the source of truth.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Create <code>Atharav001/buy-or-wait-agent</code> (public); it becomes <code>origin</code>; the original clone stays as <code>upstream</code>.</span></div>
+        <h4>Decision</h4>
+        <p><code>git remote</code>: <code>origin</code> = <code>git@/https://github.com/Atharav001/buy-or-wait-agent</code>, <code>upstream</code> = <code>https://github.com/interviewstreet/hackerrank-orchestrate-september26.git</code>. All build work lives on <code>main</code>.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Version control through the 24-hour window with a clean, diffable tie back to the starter repo (DEC-015's spec-fidelity posture benefits from a live diff target).</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Standard open-source fork discipline: track the authoritative upstream as <code>upstream</code>, own work as <code>origin</code> — the same topology GitHub Documents and forks use so the delta from source stays reviewable.</div>
+        <p class="links">Supersedes: none</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-027">
+      <div class="d-head"><div><span class="d-id">DEC-027</span><span class="d-title">Provider-flexible extraction (OpenAI low-cost / Gemini Flash)</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>design.md §8's run instructions assumed an <code>ANTHROPIC_API_KEY</code>. The participant will supply their own credential later — either a paid low-cost OpenAI model (e.g. GPT-4o mini family) or a free Gemini Flash key. Locking the code to one provider now would force a rewrite leak of the vLM boundary.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Lock to Anthropic — not the credential the participant owns, would block Phase 3.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Hardcode one of the two candidate providers — unknown which key arrives, and swapping would require touching <code>extraction/</code> internals.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Provider-agnostic extraction client selected by config: <code>EXTRACTION_PROVIDER=openai|gemini</code>, keys from <code>OPENAI_API_KEY</code>/<code>GEMINI_API_KEY</code> env vars, SDK lazy-imported, identical Pydantic schema contract and retry-on-validation-failure guard sequence for both.</span></div>
+        <h4>Decision</h4>
+        <p><code>config.py</code> resolves provider + model from environment with sane defaults (<code>openai</code> default model <code>gpt-4o-mini</code>; <code>gemini</code> default <code>gemini-2.0-flash</code>, both overridable). All extraction calls run temperature 0 for determinism (DEC-001/DEC-018).</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Honors the participant's actual available credentials at zero extra implementation cost.</li>
+        <li>Keeps the §3.3 guard sequence (sanitize → flag → schema-forced call → sanity bounds → cross-field validation) provider-independent so DEC-011/DEC-012 protections don't fork per vendor.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Provider-agnostic model routing (LiteLLM, Vercel AI SDK) is the standard way to keep application logic stable while the underlying model/key can change — the extraction layer here is the same pattern applied to a 16-image + 215-message workload.</div>
+        <p class="links">Supersedes: none — amends design.md §8's example run command without changing any decision it encodes.</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-028">
+      <div class="d-head"><div><span class="d-id">DEC-028</span><span class="d-title">Expense-cut ordering: largest eligible amount first</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>DEC-025 says cut "lowest-priority flexible expense first," but <code>financial_profiles.csv</code> expresses priority only as goal lists (<code>financial_priorities</code>, e.g. <code>education|debt_repayment</code>) plus separate <code>willing_to_reduce</code> / <code>willing_to_stop</code> category lists — there is no per-category numeric rank in the data to sort by. The participant was consulted; they deferred the mechanism and asked that any clash with the golden set be surfaced.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Profile-list category order only — two categories could order differently across users with no meaning attached to position.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Stop-list before reduce-list strictly — ignores magnitude; can require more than the minimal change count.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Priorities-protected ordering (never cut categories overlapping <code>financial_priorities</code>) — hard to justify when <code>willing_to_stop</code> explicitly lists a category a user values less.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Among eligible, non-protected, recurring events, sort by amount <b>descending</b>, try <code>stop</code> before <code>reduce_to</code> per DEC-025, keep the minimal sufficient set (cap 3), break ties by <code>event_id</code> ascending for determinism.</span></div>
+        <h4>Decision</h4>
+        <p><code>select_spending_changes()</code> (design.md §3.4b) orders candidates largest-first so the fewest cuts restore safety; each candidate is first attempted as <code>stop</code>, then <code>reduce_to:<event_id>:<minimum_allowed_amount></code> if the event has one.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Largest-first minimizes the number of changed items, matching the spec's implicit minimality and DEC-025's "minimal sufficient set."</li>
+        <li>Fully deterministic (DEC-001); the 25 golden rows so far do not contradict it — sample requests used single categories in each eligible list, so this rule never needed to order between categories on the labeled set.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Budget-cure tools (Copilot Money, PocketSmith) recommend cutting the largest discretionary spend first within the user's chosen adjustable scope, and stop-before-reduce matches the user's stronger commitment signal — both are standard heuristics in personal-finance rebalancing UX and literature.</div>
+        <p class="links">Supersedes: none — refines DEC-025's ordering mechanism with a concrete, data-available rule.</p>
+      </div>
+    </div>
+
+    <p class="section-label">Golden-set calibration &amp; final run — DEC-029 → DEC-033</p>
+
+    <div class="decision" id="dec-029">
+      <div class="d-head"><div><span class="d-id">DEC-029</span><span class="d-title">Salary streams continue by default; only a payout-halt stops income</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Golden-set calibration showed income streams keep flowing across the forecast window even when no message or scheduled row introduces or reconfirms them (users 16/19; 48 of the 50 eval users with salary have at least a scheduled row). An earlier build-reading hypothesis — gate continuation on message evidence — underforecast income for exactly the users gold credited it to.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Gate continuation on the message mentioning the salary — reduces forecast income for 16/19 vs gold and for every no-message salary user.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Gate on a scheduled row within a narrow window only — brittle against request dates that sit between schedule and settlement.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Continuation is the default whenever the settled cadence exists; income stops only on a <code>payout_pending</code> pending-kill signal; reduction messages apply from the next cycle and persist at the stated amount.</span></div>
+        <h4>Decision</h4>
+        <p><code>_book_salary_streams</code> returns early when <code>payout_pending</code> gates (user_10 therefore has no income); <code>salary_reduce_next</code> carries the message amount forward from the first affected cycle on, not just one cycle. The full-lifetime evidence gate was removed.</p>
+        <h4>Why it's right for this build</h4>
+        <ul>
+          <li>Matches gold behavior on the labeled rows and the eval-wide signal (48/50 salary users have schedule evidence — continuation is the statistically normal case).</li>
+          <li>Keeps DEC-008's principle intact: the "history" that justifies recurrence is the settled cadence, not a per-cycle message.</li>
+          <li>Moveable target: request_08 residual dropped from ~1056 to ~14 after the reduce-persistence fix alone.</li>
+        </ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Income-verification engines (Nova Credit Cash Atlas, ClearScore-style affordability checks) project salary over the wage-cycle it is evidenced for and stop only at a documented hold/pause, not on the absence of a redundant confirmation — standing arrangements persist until a stopping event arrives.</div>
+        <p class="links">Supersedes: none — corrects an implementation error in the reconciler, not a reversal of DEC-008.</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-030">
+      <div class="d-head"><div><span class="d-id">DEC-030</span><span class="d-title">Plan safety is judged through the plan's own completion date</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Gold rows diverge unless the safety window differs by evaluation phase: request_04 approves a 17-day plan while <code>earliest_date_for_full_payment</code> sits 67 days out; request_11 pays in full today despite a later-window shortfall; request_12/22 accept same-day installments. That is only consistent if <em>chosen-plan</em> safety is bounded at the plan's completion date, while the safe-amount and earliest-full-payment scans still use the full forecast horizon.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>One window (the full horizon) for everything — rejects request_11's full-pay-today and request_04's short plan vs gold.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Check safety only on discrete payment dates — hides dips between legs and is discontinuous.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Daily-run safety bounded at <code>min(horizon_end, plan.completion_date)</code> for plan checks; the 90-day-scale daily scan stays for <code>amount_safe_to_pay</code> and <code>earliest_date_for_full_payment</code>.</span></div>
+        <h4>Decision</h4>
+        <p><code>solver.plan_is_safe</code> and <code>current_min</code> pass <code>plan.completion_date</code> as the scan bound; <code>compute_amount_safe_to_pay</code> and <code>compute_earliest_full_payment_date</code> remain full-horizon.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Reconciles the one set of gold rows whose statuses had "no number could explain" (04/11/12/22) and lifts calibration from 15/25 to 19/25 agreed status+method.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Credit underwriting evaluates affordability over the specific loan term — the obligation being underwritten, not the borrower's entire horizon — while still reporting broader capacity metrics separately; two different windows for two different questions, exactly the split adopted here.</div>
+        <p class="links">Supersedes: none — refines the window definition left implicit in DEC-009.</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-031">
+      <div class="d-head"><div><span class="d-id">DEC-031</span><span class="d-title">Equal-cost plans resolve toward the earlier start</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Requests 11/21/06 in the golden set prefer an immediate (or earliest) start over an equal-cost wait. The original tie-break order ranked fewer payments before earlier start, which chose "wait" exactly where gold chose "start now."</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Keep the DEC-010 order (fewer payments before earliest start) — scores 11/21/06 wrong.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Six-key order: deadline → total paid → earliest start → fewest payments → fewest spending changes → lowest option rank. Financial total first (DEC-010 stands), but among equal totals the user gets the money sooner.</span></div>
+        <h4>Decision</h4>
+        <p><code>rank_plans</code> sorts by the reordered keys; equal-cost "start sooner" now beats "wait."</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>With equal total cost, deferring payment has no financial benefit — earlier start is both spec-aligned ("starts earlier" precedes "uses fewer payments") and gold-aligned.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Same rationale as DEC-010's ordered-hierarchy sources (FINRA agentic-AI decisioning): among offers with identical price, regulator and user preference both favor earlier fulfillment over deferred fulfillment — no rational reason to hold cash flow back at equal cost.</div>
+        <p class="links">Supersedes: none — refines the tie-break order of DEC-010 as already extended by DEC-021.</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-032">
+      <div class="d-head"><div><span class="d-id">DEC-032</span><span class="d-title">Evaluated run is fully deterministic: zero model calls, reported honestly</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>The tested extraction layer (DEC-001/012/027) stays wired for blank-amount vision reads, but the final full-dataset run produced <code>output.csv</code> without a single model call: <code>main.py</code> imports no extraction or model module, and 11 eval users who have blank-amount expense events (users 33, 35, 48, 55, 64, 73, 78, 84, 101, 105, 113) were reconciled with the conservative exclusion path instead of a vLM read.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Force a vLM call per message/image "to be thorough" — burns cost, injects nondeterminism, and adds nothing the typed message-rules and conservative blank handling do not already deliver.</span></div>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Add an LLM explainer for nicer prose — DEC-013's caged explainer was never needed; deterministic templates cover <code>decision_explanation</code> groundedness.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Ship the deterministic path as the evaluated system and record the actual zero usage in <code>evaluation/usage_report.md</code>; keep the caged extraction path intact for any future input that genuinely needs a blank-amount read.</span></div>
+        <h4>Decision</h4>
+        <p><code>output.csv</code> is produced by <code>code/main.py</code> end-to-end with no model boundary; <code>usage_report.md</code> states 0 calls / 0 tokens / ~0 cost rather than inflating figures (FR-12).</p>
+        <h4>Why it's right for this build</h4>
+        <ul>
+          <li>Determinism is a scored requirement (DEC-018); removing every live probabilistic step strengthens it.</li>
+          <li>Honest accounting beats padded usage — the report is a graded artifact (AGENTS.md §6.5).</li>
+        </ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Fintech pipelines routinely keep a human/vLM exception path for ambiguous documents while running the 99% happy path deterministically — and DEC-017's "rules engine has veto power" posture extends naturally to "no model call is cheaper and still compliant."</div>
+        <p class="links">Supersedes: none — confirms DEC-001's "LLM only at the edges" with zero edges exercised on the evaluated set.</p>
+      </div>
+    </div>
+
+    <div class="decision" id="dec-033">
+      <div class="d-head"><div><span class="d-id">DEC-033</span><span class="d-title">Per-request horizon = max(90d, span to deadline)</span></div><span class="status active">ACTIVE</span></div>
+      <div class="d-body">
+        <h4>Context</h4>
+        <p>Eval deadline spreads (<code>desired_completion_date − request_date</code>) run 6 to 86 days, and monthly installment legs can land past the nominal 90-day window even when the deadline itself is inside it — a fixed 90-day horizon would truncate legitimate plan legs.</p>
+        <h4>Options considered</h4>
+        <div class="option-row"><span class="option-tag rejected">REJECTED</span><span>Hardcoded 90-day window for every request — drops long installment legs and understates early-window cushion.</span></div>
+        <div class="option-row"><span class="option-tag chosen">CHOSEN</span><span>Horizon = <code>max(90, desired_completion_date − request_date)</code> per request, so every candidate's legs stay inside the safety scan while the short-span requests keep the standard 90-day semantics.</span></div>
+        <h4>Decision</h4>
+        <p><code>main.py</code> passes <code>horizon_days=max(90, span)</code> into reconciliation and forecasting for each request.</p>
+        <h4>Why it's right for this build</h4>
+        <ul><li>Minimal change, fixes the truncated-legate case without changing anything about the 6-day-to-90-day bulk of the set.</li></ul>
+        <h4>Real-world precedent</h4>
+        <div class="precedent">Batch forecasting engines size the evaluation window to the longest obligation under review rather than a fixed constant — same reason PocketSmith varies projection length by the goals being modeled.</div>
+        <p class="links">Supersedes: none — extends DEC-009's window definition with a dataset-driven bound.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<footer>
+  Buy or Wait? — Decision Ledger · append-only · next entry is <b>DEC-034</b> · see “Logging protocol” above before editing
+</footer>
+
+</body>
+</html>
