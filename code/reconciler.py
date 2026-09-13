@@ -593,11 +593,13 @@ def reconcile(
     facts: list[ClaimedFact] | None = None,
     msg_facts: list[MessageFact] | None = None,
     horizon_days: int = 90,
+    image_amounts: dict[str, Decimal] | None = None,
 ) -> ReconciledLedger:
     profile = ds.profiles[user_id]
     horizon_end = request_date + dt.timedelta(days=horizon_days)
     facts = facts or []
     msg_facts = msg_facts or []
+    image_amounts = image_amounts or {}
 
     # only evidence available on or before the request date counts (temporal).
     msgs = [
@@ -610,6 +612,22 @@ def reconcile(
     survivors = collapse_chains(effective)
     survivors = [e for e in survivors if e.status not in ("cancelled", "failed")]
 
+    # blank-amount receipts resolved from images (DEC-032/034): fill the amount
+    # before any inclusion/dedup decision so the event flows through the normal
+    # path exactly like a confirmed amount. Unresolved blanks stay excluded.
+    if image_amounts:
+        resolved = 0
+        for i, e in enumerate(survivors):
+            amt = image_amounts.get(e.event_id)
+            if amt is None:
+                continue
+            survivors[i] = e.model_copy(update={"amount": amt})
+            resolved += 1
+        if resolved:
+            ledger_audit_hint = f"image-resolved amounts: {sorted(image_amounts)[:8]}"
+        else:
+            ledger_audit_hint = "image_amounts supplied but none matched this user's events"
+
     ledger = ReconciledLedger(
         user_id=user_id,
         request_date=request_date,
@@ -617,13 +635,18 @@ def reconcile(
         profile=profile,
         start_balance=profile.current_available_balance,
     )
+    if image_amounts:
+        ledger.audit.append(locals().get("ledger_audit_hint", "image_amounts were supplied"))
 
     hc = profile.home_currency
 
     def to_home(e: FinancialEvent) -> Optional[Decimal]:
         if e.amount is None:
             return None  # unresolved blank amount -> excluded (safer, DEC-004/006)
-        on = e.settlement_date or e.event_date
+        on = (e.settlement_date or e.event_date).isoformat()
+        # exact-date ISO string, matching the project/conv paths (line 575/760).
+        # A raw date object never matches the string-keyed rate map and would
+        # silently drop every settled foreign-currency event (DEC-034 find).
         return _conv(e.amount, e.currency, hc, on, ds)
 
     # -- explicit ledger rows inside the horizon (confirmed facts) ----------

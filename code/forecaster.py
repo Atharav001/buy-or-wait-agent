@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 from decimal import Decimal
-from typing import Iterable
+from typing import Iterable, Optional
 
 from reconciler import ReconciledLedger
 
@@ -38,6 +38,20 @@ class DailyBalanceSeries:
                 n = 1
             day += dt.timedelta(days=1)
         return cur if n else Decimal("0")
+
+    def min_day_between(self, a: dt.date, b: dt.date) -> Optional[dt.date]:
+        """Date inside [a, b] inclusive where the minimum closing balance occurs."""
+        best_v: Optional[Decimal] = None
+        best_d: Optional[dt.date] = None
+        day = max(a, self.start)
+        last = min(b, self.end)
+        while day <= last:
+            v = self.balances.get(day, Decimal("0"))
+            if best_v is None or v < best_v:
+                best_v = v
+                best_d = day
+            day += dt.timedelta(days=1)
+        return best_d
 
 
 def _series(ledger: ReconciledLedger, merged: dict[dt.date, Decimal]) -> DailyBalanceSeries:

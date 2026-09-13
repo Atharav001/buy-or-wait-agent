@@ -52,3 +52,13 @@ phase: every financial decision is produced by fixed rules over the provided
    applying protected-category and minimum-balance rules.
 5. `main.py` maps the best plan to the required output schema and writes
    `output.csv`.
+
+## Opt-in extraction path (not part of this run)
+
+`main.resolve_image_amounts()` can read the 16 blank-amount receipts
+(`image_01`..`image_16`, DEC-034) off disk through the caged VLM layer — but
+that path activates **only** when an API key and `EXTRACTION_PROVIDER` are
+present. On the evaluated run no key was set, so it contributed **0 calls / 0
+tokens / 0 cost** and every blank-amount event stayed on the conservative
+exclusion path. A future run with a key would report its own usage here; this
+report documents exactly the submitted `output.csv`.

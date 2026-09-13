@@ -168,17 +168,6 @@ def _payout_pending(t: str) -> bool:
     )
 
 
-# ---------------------------------------------------------------------------
-# Builder: turn a matched message into a MessageFact
-# ---------------------------------------------------------------------------
-    return (
-        "client approved an invoice payment" in t
-        or "klien menyetujui pembayaran faktur" in t
-        or "client approved an invoice payment of" in t
-        or "pembayaran faktur" in t
-    )
-
-
 def _invoice_approved(t: str) -> bool:
     return (
         "client approved an invoice payment" in t

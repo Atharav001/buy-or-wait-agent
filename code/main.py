@@ -55,6 +55,49 @@ def changes_string(changes: list) -> str:
     return "|".join(parts)
 
 
+def resolve_image_amounts(ds: ING.RawDataset):
+    """Blank-amount receipts -> {event_id: amount} via the caged VLM layer.
+
+    Only runs when an extraction provider + API key is configured (DEC-027).
+    Results are cached on disk keyed by (user, image_id) (DEC-014). Without a
+    key this returns an empty map and nothing changes: unresolved blanks stay
+    conservatively excluded (DEC-006/032), so the deterministic output is
+    byte-identical whether or not a key is present.
+    """
+    if not config.EXTRACTION_PROVIDER:
+        return {}, None
+    try:
+        from extraction import ExtractionEngine
+
+        engine = ExtractionEngine(cache_dir=config.CACHE_DIR)
+    except Exception:
+        return {}, None  # broken/missing provider config: degrade to no-key path
+
+    img_by_event = {im.related_event_id: im for im in ds.images if im.related_event_id}
+    amounts: dict[str, Decimal] = {}
+    for e in ds.blank_amount_events:
+        img = img_by_event.get(e.event_id)
+        if img is None:
+            continue
+        try:
+            ex = engine.extract_amount_from_image(
+                ING.image_path(ds, img.image_id),
+                {
+                    "event_type": e.event_type,
+                    "description": e.description,
+                    "status": e.status,
+                    "category": e.category,
+                    "direction": e.direction,
+                },
+                e.user_id,
+                img.image_id,
+            )
+            amounts[e.event_id] = ex.amount
+        except Exception as exc:  # ExtractionError and network/parse failures
+            print(f"  warn: image extraction {img.image_id} skipped ({exc!r})")
+    return amounts, engine
+
+
 # ---------------------------------------------------------------------------
 # affordability decision + explanation (mirrors sample gold semantics)
 # ---------------------------------------------------------------------------
@@ -70,6 +113,8 @@ def decide(ds, request, ledger, forecast):
 
     prof = ledger.profile
     cur = ds.profiles[request.user_id].home_currency
+    low = forecast.min_day_between(ledger.request_date, ledger.horizon_end)
+    low_txt = f" Balance is tightest on {low.isoformat()}." if low else ""
 
     if best is None:
         reason = (
@@ -104,7 +149,7 @@ def decide(ds, request, ledger, forecast):
         reason = (
             f"Pay {cur} {money(requested)} in full on "
             f"{best.first_payment_date.isoformat()}. This is safe and keeps at least {cur} "
-            f"{money(prof.minimum_balance_to_keep)} available."
+            f"{money(prof.minimum_balance_to_keep)} available throughout the forecast."
         )
         earliest = request.request_date
     else:
@@ -115,6 +160,7 @@ def decide(ds, request, ledger, forecast):
                 f"Pay {cur} {money(safe)} today and the remaining {cur} {money(rest)} on "
                 f"{best.completion_date.isoformat()}. This completes the full request and keeps "
                 f"the {cur} {money(prof.minimum_balance_to_keep)} minimum protected."
+                + low_txt
             )
         elif method == "full_payment":
             cuts = best.spending_changes or []
@@ -127,6 +173,7 @@ def decide(ds, request, ledger, forecast):
             reason = (
                 lead
                 + f"This keeps at least {cur} {money(prof.minimum_balance_to_keep)} available."
+                + low_txt
             )
         else:  # installments
             n = best.number_of_payments
@@ -134,6 +181,7 @@ def decide(ds, request, ledger, forecast):
                 f"Use {n} installments of {cur} {money(best.legs[0][1])}, starting "
                 f"{best.first_payment_date.isoformat()}. This leaves at least {cur} "
                 f"{money(prof.minimum_balance_to_keep)} available."
+                + low_txt
             )
 
     return {
@@ -154,6 +202,12 @@ def decide(ds, request, ledger, forecast):
 def run(dataset_dir: Path, out_path: Path) -> None:
     ds = ING.load_all(dataset_dir)
     msg_facts = MR.parse_messages(list(csv.DictReader(open(dataset_dir / "messages.csv"))))
+    image_amounts, engine = resolve_image_amounts(ds)
+    if engine is not None:
+        print(
+            f"image extraction active: provider={config.EXTRACTION_PROVIDER}, "
+            f"resolved {len(image_amounts)} blank-amount event(s)"
+        )
 
     rows = []
     for request in ds.requests:
@@ -171,10 +225,17 @@ def run(dataset_dir: Path, out_path: Path) -> None:
             request.request_date,
             msg_facts=msg_facts.get(request.user_id, []),
             horizon_days=horizon,
+            image_amounts=image_amounts,
         )
         forecast = FC.simulate_balance(ledger)
         row = decide(ds, request, ledger, forecast)
         rows.append({"request_id": request.request_id, **row})
+
+    if engine is not None:
+        st = engine.stats
+        print(
+            f"extraction usage: image_calls={st.image_misses} image_cache_hits={st.image_hits}"
+        )
 
     cols = [
         "request_id",

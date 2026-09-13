@@ -77,6 +77,14 @@ def _check_schema(path: Path, rows: list[dict]) -> None:
     missing = need - have
     if missing:
         raise IngestError(f"{path.name}: missing columns {sorted(missing)}")
+    # every row must carry the same header set — a later row with extra/short
+    # columns would silently misalign csv.DictReader access (DEC-003).
+    for i, r in enumerate(rows):
+        if set(r.keys()) != have:
+            raise IngestError(
+                f"{path.name}: row {i + 2} columns differ from header "
+                f"(got {sorted(set(r.keys()))})"
+            )
 
 
 def _dec(v: str | None) -> Decimal | None:
