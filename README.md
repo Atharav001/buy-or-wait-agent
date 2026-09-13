@@ -145,6 +145,23 @@ The system features a dual execution model:
 | `decision_explanation` | **52.0%** (13/25) | Gold template prose match (`human_date`, `money_comma`) |
 | `amount_safe_to_pay` | **12.0%** (3/25) | Conservative floor protection (structural cadence delta) |
 
+### Cost & Token Economics (Run Comparison)
+
+| Metric | Run 1: Zero-Token Deterministic Baseline | Run 2: Multimodal VLM (`gpt-4o-mini`) |
+|---|---|---|
+| **Model Provider** | None (Deterministic Rules) | OpenAI |
+| **Model Name** | N/A | `gpt-4o-mini` (Vision) |
+| **Receipts Extracted** | 0 / 16 (safe exclusion) | **16 / 16 (100% extracted)** |
+| **Total API Calls** | 0 | 16 (cached) |
+| **Total Input Tokens** | 0 | ~20,160 |
+| **Total Output Tokens** | 0 | ~780 |
+| **Total Tokens** | 0 | ~20,940 |
+| **Total Estimated Cost** | **$0.00** | **~$0.0035** (< 1 cent) |
+| **Cost Per Request** | $0.00 | **<$0.00002** |
+| **Latency (250 requests)** | **0.9s** | ~12s (first run) / **0.9s** (cached) |
+| **Unit Tests Passing** | 51 / 51 | 51 / 51 |
+| **Output SHA-256** | `b0d791b689876a2...` | `7a35fd6fe0dc18e...` |
+
 ---
 
 ## 5. Execution & Verification
