@@ -39,6 +39,25 @@ def money(x) -> str:
     return s
 
 
+_MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+
+
+def money_comma(x) -> str:
+    """Gold-style human amount: thousands separated, 2dp kept unless whole."""
+    s = f"{Decimal(x):,.2f}"
+    if s.endswith(".00"):
+        s = s[:-3]
+    return s
+
+
+def human_date(d: dt.date) -> str:
+    """Gold-style human date: '15 September 2024' (no zero padding)."""
+    return f"{d.day} {_MONTHS[d.month - 1]} {d.year}"
+
+
 def plan_string(legs: list) -> str:
     return "|".join(f"{d.isoformat()}:{money(a)}" for d, a in legs)
 
@@ -53,6 +72,37 @@ def changes_string(changes: list) -> str:
         else:
             parts.append(f"reduce_to:{ch.event_id}:{money(ch.new_amount)}")
     return "|".join(parts)
+
+
+def _event_name(ds, request, event_id: str) -> str:
+    """Display name for a change target: its event description when available."""
+    for e in ds.events_by_user.get(request.user_id, []):
+        if e.event_id == event_id:
+            if e.description:
+                return e.description
+            return e.category.replace("_", " ")
+    return event_id
+
+
+def _change_lead(ds, request, changes) -> str:
+    """Gold-style spending-change preface: 'Stop the X and reduce the Y to Z,'."""
+    parts = []
+    for ch in changes:
+        name = _event_name(ds, request, ch.event_id)
+        if ch.action == "stop":
+            parts.append(f"stop the {name}")
+        else:
+            parts.append(f"reduce the {name} to {cur_text(ds, request, ch.new_amount)}")
+    text = parts[0].capitalize()
+    if len(parts) > 2:
+        text += ", " + ", ".join(parts[1:-1])
+    if len(parts) > 1:
+        text += " and " + parts[-1]
+    return text + ","
+
+
+def cur_text(ds, request, amount) -> str:
+    return f"{ds.profiles[request.user_id].home_currency} {money_comma(amount)}"
 
 
 def resolve_image_amounts(ds: ING.RawDataset):
@@ -113,15 +163,20 @@ def decide(ds, request, ledger, forecast):
 
     prof = ledger.profile
     cur = ds.profiles[request.user_id].home_currency
-    low = forecast.min_day_between(ledger.request_date, ledger.horizon_end)
-    low_txt = f" Balance is tightest on {low.isoformat()}." if low else ""
+    min_txt = f"{cur} {money_comma(prof.minimum_balance_to_keep)}"
 
     if best is None:
-        reason = (
-            f"Do not make this payment by {request.desired_completion_date.isoformat()}. "
-            f"None of the available options keeps the {cur} {money(prof.minimum_balance_to_keep)} "
-            "minimum protected."
-        )
+        if safe > ZERO:
+            reason = (
+                f"Do not proceed with the {cur} {money_comma(requested)} request. "
+                f"Although {cur} {money_comma(safe)} is available today, the full amount "
+                f"cannot be completed safely within 90 days."
+            )
+        else:
+            reason = (
+                f"Do not make this payment by {human_date(request.desired_completion_date)}. "
+                f"None of the available options keeps the {min_txt} minimum protected."
+            )
         return {
             "amount_safe_to_pay": money(safe),
             "affordability_status": "not_affordable",
@@ -133,23 +188,23 @@ def decide(ds, request, ledger, forecast):
         }
 
     method = best.method
+    changes = best.spending_changes or []
     if method == "wait":
         status = "affordable_later"
         reason = (
-            f"Wait until {earliest.isoformat()}, then pay {cur} {money(requested)} in full. "
-            f"Paying sooner would take the balance below the {cur} "
-            f"{money(prof.minimum_balance_to_keep)} minimum."
+            f"Pay {cur} {money_comma(requested)} in full on "
+            f"{human_date(earliest)}. Paying earlier would take the balance below the "
+            f"{min_txt} minimum."
         )
     elif (
         method == "full_payment"
-        and not best.spending_changes
+        and not changes
         and safe >= requested
     ):
         status = "affordable_now"
         reason = (
-            f"Pay {cur} {money(requested)} in full on "
-            f"{best.first_payment_date.isoformat()}. This is safe and keeps at least {cur} "
-            f"{money(prof.minimum_balance_to_keep)} available throughout the forecast."
+            f"Pay {cur} {money_comma(requested)} today. This leaves at least "
+            f"{min_txt} available over the next 90 days."
         )
         earliest = request.request_date
     else:
@@ -157,31 +212,25 @@ def decide(ds, request, ledger, forecast):
         if method == "partial_payment":
             rest = (requested - safe).quantize(Decimal("0.01"))
             reason = (
-                f"Pay {cur} {money(safe)} today and the remaining {cur} {money(rest)} on "
-                f"{best.completion_date.isoformat()}. This completes the full request and keeps "
-                f"the {cur} {money(prof.minimum_balance_to_keep)} minimum protected."
-                + low_txt
+                f"Pay {cur} {money_comma(safe)} today and the remaining "
+                f"{cur} {money_comma(rest)} on {human_date(best.completion_date)}. "
+                f"This completes the full request and keeps the {min_txt} minimum protected."
             )
         elif method == "full_payment":
-            cuts = best.spending_changes or []
-            if cuts:
+            if changes:
                 lead = (
-                    f"Apply {changes_string(cuts)}, then pay {cur} {money(requested)} today. "
+                    f"{_change_lead(ds, request, changes)} then pay "
+                    f"{cur} {money_comma(requested)} today. "
                 )
             else:
-                lead = f"Pay {cur} {money(requested)} today. "
-            reason = (
-                lead
-                + f"This keeps at least {cur} {money(prof.minimum_balance_to_keep)} available."
-                + low_txt
-            )
+                lead = f"Pay {cur} {money_comma(requested)} today. "
+            reason = lead + f"This leaves at least {min_txt} available."
         else:  # installments
             n = best.number_of_payments
             reason = (
-                f"Use {n} installments of {cur} {money(best.legs[0][1])}, starting "
-                f"{best.first_payment_date.isoformat()}. This leaves at least {cur} "
-                f"{money(prof.minimum_balance_to_keep)} available."
-                + low_txt
+                f"Use {n} installments of {cur} {money_comma(best.legs[0][1])}, starting "
+                f"{human_date(best.first_payment_date)}. This leaves at least "
+                f"{min_txt} available."
             )
 
     return {

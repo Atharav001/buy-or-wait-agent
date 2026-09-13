@@ -1,14 +1,13 @@
-"""gold_check: run the pipeline on the public sample requests as pseudo-requests
-and compare every decision field to the gold sample_requests.csv answers.
+"""run_eval: reproduce the submitted output.csv from the code + dataset and
+verify it against the public gold sample answers (sample_requests.csv).
 
-The eval requests.csv ids (request_100+) never overlap the sample ids
-(request_01..25), so the only place to calibrate against ground truth is to
-feed the sample rows through the exact same reconcile/forecast/decide path used
-for the real dataset. This script reports exact-match per field plus a line per
-divergent row, including the two non-cheatable fields (amount_safe_to_pay,
-spending_changes_needed) normalized with the gold money() trim rule.
+This is the evaluator entry point referenced by README. It re-runs the exact
+reconcile/forecast/decide path used to produce the submission output.csv, then
+reports exact match counts per decision field over the 25 public samples.
+The real eval requests (request_100+) never overlap the sample ids, so the
+sample feed is the only calibration surface available.
 
-Run:  python3 tools/gold_check.py [dataset_dir]
+Run:  python3 evaluation/run_eval.py [dataset_dir]
 """
 from __future__ import annotations
 
@@ -58,12 +57,7 @@ def build_sample_requests_csv(sample_rows: list[dict], path: Path) -> None:
 
 
 def money_norm(v: str) -> str:
-    """Normalize gold-style numbers in a value: floats lean on ".00" trim.
-
-    Applies to whole money strings ("12345.00" -> "12345") and to each
-    reduce_to:<id>:<amount> action inside spending_changes, leaving
-    stop:<id> segments untouched.
-    """
+    """Normalize gold-style numbers in a value: floats lean on '.00' trim."""
     if v in ("", "none"):
         return v
 
@@ -87,7 +81,7 @@ def main() -> int:
     with open(dataset_dir / "sample_requests.csv") as f:
         gold_rows = list(csv.DictReader(f))
 
-    tmp = Path(tempfile.mkdtemp(prefix="goldcheck_"))
+    tmp = Path(tempfile.mkdtemp(prefix="run_eval_"))
     try:
         build_sample_requests_csv(gold_rows, tmp / "requests.csv")
         for name in (

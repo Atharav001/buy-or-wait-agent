@@ -501,10 +501,11 @@ def _book_salary_streams(
 
     # with a payroll message the generator focuses on the single regular
     # salary; variable secondary streams (commissions etc.) stay pending.
+    base_ids: set[str] = {e.event_id for e in base_evs}
     streams: list[tuple[int, list[FinancialEvent]]] = [(base_day, base_evs)]
     if not pay_msgs:
         for day, members in _salary_sub_streams(evs):
-            if members is base_evs:
+            if members is base_evs or {e.event_id for e in members} == base_ids:
                 continue
             if any(
                 e.status == "scheduled" and e.settlement_date
@@ -582,6 +583,48 @@ def _book_salary_streams(
 
 
 # ---------------------------------------------------------------------------
+def _projected_amount(
+    evs: list[FinancialEvent],
+    method: str,
+) -> Decimal:
+    """Projected amount for a recurring stream under experiment method.
+
+    DEC-037 experiment seam: methods apply to short-cadence discretionary
+    debit streams only. "last" (default) repeats the most recent observed
+    amount; alternatives summarise the stream history differently.
+    """
+    amts = [e.amount for e in evs if e.amount is not None]
+    if not amts:
+        return Decimal("0")
+    if method in ("mean", "trimmed", "last3", "median"):
+        if method == "median":
+            ordered = sorted(amts)
+            n = len(ordered)
+            if n % 2 == 1:
+                return ordered[n // 2]
+            return (ordered[n // 2 - 1] + ordered[n // 2]) / 2
+        if method == "last3":
+            last_three = amts[-3:] if len(amts) >= 3 else amts
+            return sum(last_three, Decimal("0")) / len(last_three)
+        if method == "trimmed" and len(amts) >= 3:
+            ordered = sorted(amts)
+            trimmed = ordered[1:-1]
+            return sum(trimmed, Decimal("0")) / len(trimmed)
+        return sum(amts, Decimal("0")) / len(amts)
+    return amts[-1]
+
+
+def _projected_interval(evs: list[FinancialEvent], method: str) -> Optional[int]:
+    """Cadence under experiment: detected (current) vs trailing mean gap."""
+    dates = sorted(e.settlement_date for e in evs if e.settlement_date)
+    if len(dates) < 2:
+        return None
+    if method == "mean":
+        gaps = [(b - a).days for a, b in zip(dates, dates[1:])]
+        return int(round(sum(gaps) / len(gaps)))
+    return _detect_interval(dates)
+
+
 # Main reconcile entry point
 # ---------------------------------------------------------------------------
 
@@ -594,6 +637,8 @@ def reconcile(
     msg_facts: list[MessageFact] | None = None,
     horizon_days: int = 90,
     image_amounts: dict[str, Decimal] | None = None,
+    projection_method: str = "last",
+    projection_interval: str = "detected",
 ) -> ReconciledLedger:
     profile = ds.profiles[user_id]
     horizon_end = request_date + dt.timedelta(days=horizon_days)
@@ -709,12 +754,21 @@ def reconcile(
                 if not _credit_continuation_evidence(evs, request_date, horizon_end, msgs):
                     continue
             dates = [e.settlement_date for e in evs if e.settlement_date]
-            step = _detect_interval(dates)
+            step = _projected_interval(evs, projection_interval)
             if step is None:
                 continue
             anchor = dates[-1]
-            amount = evs[-1].amount
+            # amount method: last-value repeats evs[-1].amount (current);
+            # alternatives summarise the observed history (DEC-037 seam).
+            amount = _projected_amount(evs, projection_method)
             event_ids = [e.event_id for e in evs]
+            # no-projection policy: rely on the explicit rows only, never
+            # invent future discretionary spend beyond last settled instance
+            # (applies to short-cadence debit streams only; MONTHLY is never
+            # treated as discretionary).
+            short_cadence = isinstance(step, int) and step < 30
+            if direction == "debit" and short_cadence and projection_method == "none":
+                continue
             # real confirmed (settled/scheduled/pending) horizon rows for this
             # category are already booked above; never double-project them.
             explicit_days = {

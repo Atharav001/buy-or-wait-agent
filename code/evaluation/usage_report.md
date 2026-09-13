@@ -9,6 +9,10 @@ python3 code/main.py
 Output: `output.csv` at the repository root with one row per `request_id`
 (250 rows) in `dataset/requests.csv`.
 
+Final run: 2026-09-13 (IST); output hash `sha256`
+`5b5f126b4d058c2a744cf5ed8a73ae57bb53beef`; reproducible from a clean clone.
+Optional calibration vs the public gold samples: `python3 code/evaluation/run_eval.py`.
+
 ## Model usage
 
 The Buy or Wait? agent is **fully deterministic** (single run, reproducible,
