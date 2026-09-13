@@ -5,3 +5,5 @@ __pycache__/
 .env
 code.zip
 .pytest_cache/
+.extraction_cache/
+backup_zero_token/
